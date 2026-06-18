@@ -46,4 +46,3 @@ class SentimentModel:
             "score": 0.5,
             "text": text,
         }
-        
