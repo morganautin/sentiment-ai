@@ -18,16 +18,16 @@ pipeline {
         }
 
         stage('Lint') {
-    steps {
-        sh '''
-            docker run --rm \
-            --volumes-from jenkins \
-            -w "$WORKSPACE" \
-            python:3.12-slim \
-            sh -c "pip install flake8 -q && flake8 src/ --max-line-length=100"
-        '''
-    }
-}
+            steps {
+                sh '''
+                    docker run --rm \
+                    --volumes-from jenkins \
+                    -w "$WORKSPACE" \
+                    python:3.12-slim \
+                    sh -c "pip install flake8 -q && flake8 src/ --max-line-length=100"
+                '''
+            }
+        }
 
         stage('Build & Test') {
             steps {
@@ -52,10 +52,6 @@ pipeline {
         }
 
         stage('Push') {
-            when {
-                branch 'main'
-            }
-
             steps {
                 withCredentials([usernamePassword(
                     credentialsId: 'github-token',
@@ -63,7 +59,7 @@ pipeline {
                     passwordVariable: 'REGISTRY_PASS'
                 )]) {
                     sh """
-                        echo "$REGISTRY_PASS" | docker login ghcr.io -u "$REGISTRY_USER" --password-stdin
+                        echo "\$REGISTRY_PASS" | docker login ghcr.io -u "\$REGISTRY_USER" --password-stdin
                         docker tag ${IMAGE_NAME}:${IMAGE_TAG} ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}
                         docker push ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}
                         docker tag ${IMAGE_NAME}:${IMAGE_TAG} ${REGISTRY}/${IMAGE_NAME}:latest
