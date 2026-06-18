@@ -1,3 +1,4 @@
+# Test déclenchement automatique Jenkins
 from fastapi import FastAPI
 
 from src.schemas import PredictionRequest, PredictionResponse
