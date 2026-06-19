@@ -178,13 +178,13 @@ pipeline {
 }
 
         stage('Deploy Staging') {
-            steps {
-                sh '''
-                    sleep 5
-                    curl -f http://localhost:8001/health
-                '''
-            }
-        }
+    steps {
+        sh '''
+            sleep 5
+            curl -f http://sentiment-staging:8000/health
+        '''
+    }
+}
     }
 
     post {
