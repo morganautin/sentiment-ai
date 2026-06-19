@@ -152,17 +152,30 @@ pipeline {
         }
 
         stage('IaC Apply') {
-            steps {
-                dir('infra') {
-                    sh 'terraform init -input=false'
-                    sh """
-                        terraform apply -auto-approve \
-                        -var="image_tag=${IMAGE_TAG}" \
-                        -var="docker_host=unix:///var/run/docker.sock"
-                    """
-                }
-            }
+    steps {
+        dir('infra') {
+            sh 'terraform init -input=false'
+
+            sh '''
+                NETWORK_ID=$(docker network inspect cicd-network --format "{{.Id}}" 2>/dev/null || true)
+
+                if [ -n "$NETWORK_ID" ]; then
+                    terraform import \
+                    -var="docker_host=unix:///var/run/docker.sock" \
+                    docker_network.cicd "$NETWORK_ID" || true
+                fi
+
+                docker rm -f sentiment-staging 2>/dev/null || true
+            '''
+
+            sh """
+                terraform apply -auto-approve \
+                -var="image_tag=${IMAGE_TAG}" \
+                -var="docker_host=unix:///var/run/docker.sock"
+            """
         }
+    }
+}
 
         stage('Deploy Staging') {
             steps {
