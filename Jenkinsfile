@@ -152,39 +152,74 @@ pipeline {
         }
 
         stage('IaC Apply') {
-    steps {
-        dir('infra') {
-            sh 'terraform init -input=false'
+            steps {
+                dir('infra') {
+                    sh 'terraform init -input=false'
 
-            sh '''
-                NETWORK_ID=$(docker network inspect cicd-network --format "{{.Id}}" 2>/dev/null || true)
+                    sh '''
+                        NETWORK_ID=$(docker network inspect cicd-network --format "{{.Id}}" 2>/dev/null || true)
 
-                if [ -n "$NETWORK_ID" ]; then
-                    terraform import \
-                    -var="docker_host=unix:///var/run/docker.sock" \
-                    docker_network.cicd "$NETWORK_ID" || true
-                fi
+                        if [ -n "$NETWORK_ID" ]; then
+                            terraform import \
+                            -var="docker_host=unix:///var/run/docker.sock" \
+                            docker_network.cicd "$NETWORK_ID" || true
+                        fi
 
-                docker rm -f sentiment-staging 2>/dev/null || true
-            '''
+                        docker rm -f sentiment-staging prometheus grafana 2>/dev/null || true
+                    '''
 
-            sh """
-                terraform apply -auto-approve \
-                -var="image_tag=${IMAGE_TAG}" \
-                -var="docker_host=unix:///var/run/docker.sock"
-            """
+                    sh """
+                        terraform apply -auto-approve \
+                        -var="image_tag=${IMAGE_TAG}" \
+                        -var="docker_host=unix:///var/run/docker.sock"
+                    """
+                }
+            }
         }
-    }
-}
 
         stage('Deploy Staging') {
-    steps {
-        sh '''
-            sleep 5
-            curl -f http://sentiment-staging:8000/health
-        '''
-    }
-}
+            steps {
+                sh '''
+                    sleep 5
+                    curl -f http://sentiment-staging:8000/health
+                '''
+            }
+        }
+
+        stage('Smoke Test') {
+            when {
+                branch 'main'
+            }
+
+            steps {
+                sh '''
+                    echo "Attente démarrage (10s)..."
+                    sleep 10
+
+                    curl -f http://sentiment-staging:8000/health || exit 1
+                    echo "/health OK"
+
+                    curl -s http://sentiment-staging:8000/metrics | grep -q sentiment_predictions_total || exit 1
+                    echo "/metrics OK -- métriques SentimentAI présentes"
+
+                    sleep 20
+                    curl -s "http://prometheus:9090/api/v1/query?query=up{job='sentiment-ai'}" | grep -q '"value":.*"1"' || exit 1
+                    echo "Prometheus scrape sentiment-ai : UP"
+
+                    curl -f http://grafana:3000/api/health || exit 1
+                    echo "Grafana OK"
+                '''
+            }
+
+            post {
+                failure {
+                    sh 'docker logs prometheus || true'
+                    sh 'docker logs sentiment-staging || true'
+                    sh 'docker logs grafana || true'
+                    echo 'Smoke Test KO -- voir logs ci-dessus'
+                }
+            }
+        }
     }
 
     post {
